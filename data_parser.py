@@ -1,37 +1,15 @@
-import struct
-import math
-from datetime import datetime
+from pylab import *
 
 __author__ = 'George'
 
 
-class DataRow:
-    def __init__(self, time, x, y, z):
-        self.time = time
-        self.x = x
-        self.y = y
-        self.z = z
-
-    def __str__(self):
-        return str(self.time) + " " + str(self.x) + " " + str(self.y) + " " + str(self.z)
-
-    @property
-    def magnitude(self):
-        return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
-
-    @classmethod
-    def from_row(self, row):
-        timestamp, x, y, z = struct.unpack('>qfff', row)
-        timestamp = datetime.fromtimestamp(timestamp)
-        return DataRow(timestamp, x, y, z)
+def make_array_from_file(filename):
+    datatype = np.dtype([('timestamp', '>i8'), ('x', '>f4'), ('y', '>f4'), ('z', '>f4')])
+    data = np.fromfile(open(filename, "rb"), datatype)
+    return data
 
 
-def print_rows_from_file(filename):
-    with open(filename, "rb") as f:
-        bytes = f.read(20)
-        while bytes != b"":
-            print(DataRow.from_row(bytes))
-            bytes = f.read(20)
 
 
-print_rows_from_file("assets/data/20150111143429.dat")
+
+print(make_array_from_file("assets/data/20150111143429.dat"))
