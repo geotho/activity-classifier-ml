@@ -1,4 +1,4 @@
-from DataRow import DataRow
+from data_row import DataRow
 
 __author__ = 'George'
 
