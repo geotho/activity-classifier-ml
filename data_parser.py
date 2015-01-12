@@ -2,6 +2,8 @@ import struct
 import math
 from datetime import datetime
 
+__author__ = 'George'
+
 
 class DataRow:
     def __init__(self, time, x, y, z):
@@ -15,10 +17,21 @@ class DataRow:
 
     @property
     def magnitude(self):
-        return math.sqrt(self.x**2 + self.y**2 + self.z**2)
+        return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
 
     @classmethod
     def from_row(self, row):
         timestamp, x, y, z = struct.unpack('>qfff', row)
         timestamp = datetime.fromtimestamp(timestamp)
         return DataRow(timestamp, x, y, z)
+
+
+def print_rows_from_file(filename):
+    with open(filename, "rb") as f:
+        bytes = f.read(20)
+        while bytes != b"":
+            print(DataRow.from_row(bytes))
+            bytes = f.read(20)
+
+
+print_rows_from_file("assets/data/20150111143429.dat")
