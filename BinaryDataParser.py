@@ -3,6 +3,7 @@ __author__ = 'George'
 import struct
 from datetime import datetime
 
+
 class DataRow:
     def __init__(self, time, x, y, z):
         self.time = time
@@ -19,11 +20,11 @@ class DataRow:
         timestamp = datetime.fromtimestamp(timestamp)
         return DataRow(timestamp, x, y, z)
 
-def print_rows_from_file():
-    with open("assets/data/20150111133723.dat", "rb") as f:
+def print_rows_from_file(filename):
+    with open(filename, "rb") as f:
         bytes = f.read(20)
         while bytes != b"":
             print(DataRow.from_row(bytes))
             bytes = f.read(20)
 
-print_rows_from_file()
+print_rows_from_file("assets/data/20150111143429.dat")
