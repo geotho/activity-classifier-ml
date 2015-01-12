@@ -13,6 +13,10 @@ class DataRow:
     def __str__(self):
         return str(self.time) + " " + str(self.x) + " " + str(self.y) + " " + str(self.z)
 
+    @property
+    def magnitude(self):
+        return math.sqrt(self.x**2 + self.y**2 + self.z**2)
+
     @classmethod
     def from_row(self, row):
         timestamp, x, y, z = struct.unpack('>qfff', row)
