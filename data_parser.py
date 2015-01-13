@@ -2,17 +2,17 @@ from pylab import *
 
 __author__ = 'George'
 
+file_datatype = np.dtype([('timestamp', '>i8'), ('x', '>f4'), ('y', '>f4'), ('z', '>f4')])
+processed_datatype = np.dtype(file_datatype.descr + [('magnitude', '>f4')])
 
 def make_array_from_file(filename):
     # TODO: timestamps in numpy array
-    datatype = np.dtype([('timestamp', '>i8'), ('x', '>f4'), ('y', '>f4'), ('z', '>f4')])
-    data = np.fromfile(open(filename, "rb"), datatype)
+    data = np.fromfile(open(filename, "rb"), file_datatype)
     return data
 
 
 def generate_additional_columns(old_array):
-    new_dt = np.dtype(old_array.dtype.descr + [('magnitude', '>f4')])
-    new_array = np.zeros(old_array.shape, dtype=new_dt)
+    new_array = np.zeros(old_array.shape, dtype=processed_datatype)
     # TODO: find a better way of copying array into another
     for label in ['timestamp', 'x', 'y', 'z']:
         new_array[label] = old_array[label]
