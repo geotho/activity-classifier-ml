@@ -6,7 +6,6 @@ file_datatype = np.dtype([('timestamp', '>i8'), ('x', '>f4'), ('y', '>f4'), ('z'
 processed_datatype = np.dtype(file_datatype.descr + [('magnitude', '>f4')])
 
 def make_array_from_file(filename):
-    # TODO: timestamps in numpy array
     data = np.fromfile(open(filename, "rb"), file_datatype)
     return data
 
