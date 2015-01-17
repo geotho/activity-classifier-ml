@@ -12,7 +12,7 @@ def make_array_from_file(filename):
 
 
 def generate_additional_columns(old_array):
-    new_array = np.zeros(old_array.shape, dtype=processed_datatype)
+    new_array = np.empty(old_array.shape, dtype=processed_datatype)
     # TODO: find a better way of copying array into another
     for label in ['timestamp', 'x', 'y', 'z']:
         new_array[label] = old_array[label]
