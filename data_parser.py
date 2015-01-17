@@ -14,7 +14,8 @@ def make_array_from_file(filename):
 def generate_additional_columns(old_array):
     new_array = np.empty(old_array.shape, dtype=processed_datatype)
     # TODO: find a better way of copying array into another
-    for label in ['timestamp', 'x', 'y', 'z']:
+    new_array['timestamp'] = (old_array['timestamp'] - old_array['timestamp'][0])
+    for label in ['x', 'y', 'z']:
         new_array[label] = old_array[label]
     new_array['magnitude'] = np.sqrt(old_array['x'] ** 2 + old_array['y'] ** 2 + old_array['z'] ** 2)
     return new_array
