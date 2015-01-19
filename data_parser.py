@@ -22,16 +22,15 @@ def generate_additional_columns(old_array):
 
 
 def simple_plot(array):
-    # plot(array['timestamp'], array['x'], 'r', array['timestamp'], array['y'], 'g', array['timestamp'], array['z'], 'b')
-    plot(array['timestamp'], array['magnitude'])
-    xlabel('time (ns)')
+    plot(array['timestamp'], array['x'], 'r', array['timestamp'], array['y'], 'g', array['timestamp'], array['z'], 'b')
+    # plot(array['timestamp'], array['magnitude'])
     xlabel('time (s)')
     ylabel('acceleration (m/s2)')
     title('Plot of data')
     grid(True)
     show()
 
-data = generate_additional_columns(make_array_from_file("assets/data/accelData20150104.dat"))
+data = generate_additional_columns(make_array_from_file("assets/data/other-20150118232256.dat"))
 print(data)
 
 simple_plot(data)
