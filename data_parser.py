@@ -1,4 +1,5 @@
 from pylab import *
+from feature_extractor import extract_features
 
 __author__ = 'George'
 
@@ -34,3 +35,5 @@ data = generate_additional_columns(make_array_from_file("assets/data/accelData20
 print(data)
 
 simple_plot(data)
+
+print(extract_features(data))
