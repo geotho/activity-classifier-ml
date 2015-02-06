@@ -1,5 +1,5 @@
 from pylab import *
-from feature_extractor import extract_features
+# from feature_extractor import extract_features
 
 __author__ = 'George'
 
@@ -21,18 +21,25 @@ def generate_additional_columns(old_array):
     return new_array
 
 
-def simple_plot(array):
-    plot(array['timestamp'], array['x'], 'r', array['timestamp'], array['y'], 'g', array['timestamp'], array['z'], 'b')
-    # plot(array['timestamp'], array['magnitude'])
+def simple_plot(array1, array2):
+    # plot(array['timestamp'], array['x'], 'r', array['timestamp'], array['y'], 'g', array['timestamp'], array['z'], 'b')
+    plot(array1['timestamp'], array1['magnitude'], 'r', array2['timestamp'], array2['magnitude'], 'b')
     xlabel('time (s)')
     ylabel('acceleration (m/s2)')
     title('Plot of data')
     grid(True)
     show()
 
-data = generate_additional_columns(make_array_from_file("assets/data/other-20150118232256.dat"))
-print(data)
+filename1 = "assets/data/phone-George-Walking-20150204175429.dat"
+filename2 = "assets/data/wear-George-Walking-20150204175430.dat"
 
-simple_plot(data)
+data1 = generate_additional_columns(make_array_from_file(filename1))
 
-print(extract_features(data))
+data2 = generate_additional_columns(make_array_from_file(filename2))
+print(data2)
+simple_plot(data1, data2)
+# simple_plot(data2)
+
+
+
+# print(extract_features(data))
