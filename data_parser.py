@@ -2,7 +2,6 @@ from pylab import *
 import pandas as pd
 from sklearn_pandas import DataFrameMapper
 from sklearn import preprocessing
-# from feature_extractor import extract_features
 
 __author__ = 'George'
 
