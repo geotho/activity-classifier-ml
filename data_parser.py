@@ -1,5 +1,6 @@
 from pylab import *
 import pandas as pd
+import os
 from sklearn_pandas import DataFrameMapper
 from sklearn import preprocessing
 
@@ -63,19 +64,94 @@ def simple_plot(array1, array2):
     grid(True)
     show()
 
-# filename1 = "assets/data/20150209105135-phone-George-Other.dat" #static
-filename1 = "assets/data/phone-George-Running-20150130183943.dat"  # good running
-# filename1 = "assets/data/phone-George-Walking-20150204175429.dat"  # bad walking
-# filename2 = "assets/data/wear-George-Walking-20150204175430.dat"  # bad walking
-filename2 = filename1.replace("phone", "wear")
+#
+# # filename1 = "assets/data/20150209105135-phone-George-Other.dat" #static
+# filename1 = "assets/data/20150214204740-phone-George-Walking.dat"  # good running
+# # filename1 = "assets/data/phone-George-Walking-20150204175429.dat"  # bad walking
+# filename2 = "assets/data/20150214204742-wear-George-Walking.dat"  # bad walking
+# # filename2 = filename1.replace("phone", "wear")
+#
+# data1 = generate_additional_columns(make_array_from_file(filename1))
+# data2 = generate_additional_columns(make_array_from_file(filename2))
+#
+# # simple_plot(data1, data2)
+#
+# df1 = pd.DataFrame(data1)
+# df1.set_index('timestamp', inplace=True)
+# df2 = pd.DataFrame(data2)
+# df2.set_index('timestamp', inplace=True)
+#
+# gp1 = bin(df1)
+# gp2 = bin(df2)
+#
+# features1 = extract_features(gp1)
+# features2 = extract_features(gp2)
 
-data1 = generate_additional_columns(make_array_from_file(filename1))
-data2 = generate_additional_columns(make_array_from_file(filename2))
 
-df1 = pd.DataFrame(data1)
-df1.set_index('timestamp', inplace=True)
-df2 = pd.DataFrame(data2)
-df2.set_index('timestamp', inplace=True)
+files = []
 
-gp1 = bin(df1)
-gp2 = bin(df2)
+# def parse_files():
+# datasets = {}
+#     for i in os.listdir("assets/data"):
+#         if i.endswith(".dat"):
+#             timestamp, device, user, activity = i[:-4].lower().split('-')
+#             if device == 'phone':
+#                 datasets[(timestamp, device, user, activity)] = i
+#
+#     for k, phone_filename in datasets.items():
+#         wear_filename = phone_filename.replace("phone", "wear")
+#
+#         phone_data = pd.DataFrame(generate_additional_columns(make_array_from_file(phone_filename)))
+#         wear_data = pd.DataFrame(generate_additional_columns(make_array_from_file(wear_filename)))
+#
+#         phone_data.set_index('timestamp', inplace=True)
+#         wear_data.set_index('timestamp', inplace=True)
+#
+#         phone_features = extract_features(bin(phone_data))
+#         wear_features = extract_features(bin(wear_data))
+#
+#         renaming_function = lambda d: lambda xy: (d, ) + xy
+#         phone_features.rename(columns=renaming_function('phone'), inplace=True)
+#         wear_features.rename(columns=renaming_function('wear'), inplace=True)
+
+
+
+# if __name__ == '__main__':
+#     parse_files()
+
+
+data_set = None
+datasets = {}
+data_directory = "assets/data/"
+for i in os.listdir(data_directory):
+    if i.endswith(".dat"):
+        timestamp, device, user, activity = i[:-4].lower().split('-')
+        if device == 'phone':
+            datasets[(timestamp, device, user, activity)] = data_directory + i
+            print(i)
+
+for k, phone_filename in datasets.items():
+    wear_filename = phone_filename.replace("phone", "wear")
+
+    phone_data = pd.DataFrame(generate_additional_columns(make_array_from_file(phone_filename)))
+    wear_data = pd.DataFrame(generate_additional_columns(make_array_from_file(wear_filename)))
+
+    phone_data.set_index('timestamp', inplace=True)
+    wear_data.set_index('timestamp', inplace=True)
+
+    phone_features = extract_features(bin(phone_data))
+    wear_features = extract_features(bin(wear_data))
+
+    renaming_function = lambda d: lambda xy: (d, ) + (xy, )
+    phone_features.rename(columns=renaming_function('phone'), inplace=True)
+    wear_features.rename(columns=renaming_function('wear'), inplace=True)
+    combined_features = pd.concat([phone_features, wear_features], axis=1)
+    combined_features['activity'] = k[3]
+    combined_features = combined_features[1:-1]  # drop the first and last rows to reduce the effect of fumbling
+
+    if data_set is None:
+        data_set = combined_features
+    else:
+        data_set.append(combined_features)
+data_set
+
