@@ -1,8 +1,10 @@
 from pylab import *
 import pandas as pd
 import os
-from sklearn_pandas import DataFrameMapper
+from sklearn.metrics.metrics import f1_score
 from sklearn import preprocessing
+from sklearn import tree
+from sklearn.cross_validation import train_test_split, StratifiedShuffleSplit
 
 __author__ = 'George'
 
@@ -55,71 +57,16 @@ def extract_features(grouped):
     return features
 
 
-def simple_plot(array1, array2):
+def simple_plot(array1, array2, filename="Default"):
     # plot(array['timestamp'], array['x'], 'r', array['timestamp'], array['y'], 'g', array['timestamp'], array['z'], 'b')
     plot(array1['timestamp'], array1['magnitude'], 'r', array2['timestamp'], array2['magnitude'], 'b')
     xlabel('time (s)')
     ylabel('acceleration (m/s2)')
-    title('Running. Blue = watch, Red = phone')
+    title(filename)
     grid(True)
     show()
 
-#
-# # filename1 = "assets/data/20150209105135-phone-George-Other.dat" #static
-# filename1 = "assets/data/20150214204740-phone-George-Walking.dat"  # good running
-# # filename1 = "assets/data/phone-George-Walking-20150204175429.dat"  # bad walking
-# filename2 = "assets/data/20150214204742-wear-George-Walking.dat"  # bad walking
-# # filename2 = filename1.replace("phone", "wear")
-#
-# data1 = generate_additional_columns(make_array_from_file(filename1))
-# data2 = generate_additional_columns(make_array_from_file(filename2))
-#
-# # simple_plot(data1, data2)
-#
-# df1 = pd.DataFrame(data1)
-# df1.set_index('timestamp', inplace=True)
-# df2 = pd.DataFrame(data2)
-# df2.set_index('timestamp', inplace=True)
-#
-# gp1 = bin(df1)
-# gp2 = bin(df2)
-#
-# features1 = extract_features(gp1)
-# features2 = extract_features(gp2)
-
-
 files = []
-
-# def parse_files():
-# datasets = {}
-#     for i in os.listdir("assets/data"):
-#         if i.endswith(".dat"):
-#             timestamp, device, user, activity = i[:-4].lower().split('-')
-#             if device == 'phone':
-#                 datasets[(timestamp, device, user, activity)] = i
-#
-#     for k, phone_filename in datasets.items():
-#         wear_filename = phone_filename.replace("phone", "wear")
-#
-#         phone_data = pd.DataFrame(generate_additional_columns(make_array_from_file(phone_filename)))
-#         wear_data = pd.DataFrame(generate_additional_columns(make_array_from_file(wear_filename)))
-#
-#         phone_data.set_index('timestamp', inplace=True)
-#         wear_data.set_index('timestamp', inplace=True)
-#
-#         phone_features = extract_features(bin(phone_data))
-#         wear_features = extract_features(bin(wear_data))
-#
-#         renaming_function = lambda d: lambda xy: (d, ) + xy
-#         phone_features.rename(columns=renaming_function('phone'), inplace=True)
-#         wear_features.rename(columns=renaming_function('wear'), inplace=True)
-
-
-
-# if __name__ == '__main__':
-#     parse_files()
-
-
 data_set = None
 datasets = {}
 data_directory = "assets/data/"
@@ -135,6 +82,7 @@ for k, phone_filename in datasets.items():
 
     phone_data = pd.DataFrame(generate_additional_columns(make_array_from_file(phone_filename)))
     wear_data = pd.DataFrame(generate_additional_columns(make_array_from_file(wear_filename)))
+    # simple_plot(phone_data, wear_data, phone_filename)
 
     phone_data.set_index('timestamp', inplace=True)
     wear_data.set_index('timestamp', inplace=True)
@@ -146,12 +94,46 @@ for k, phone_filename in datasets.items():
     phone_features.rename(columns=renaming_function('phone'), inplace=True)
     wear_features.rename(columns=renaming_function('wear'), inplace=True)
     combined_features = pd.concat([phone_features, wear_features], axis=1)
+    # combined_features = wear_features
     combined_features['activity'] = k[3]
     combined_features = combined_features[1:-1]  # drop the first and last rows to reduce the effect of fumbling
 
     if data_set is None:
         data_set = combined_features
     else:
-        data_set.append(combined_features)
-data_set
+        data_set = data_set.append(combined_features)
 
+le = preprocessing.LabelEncoder()
+le.fit(data_set['activity'])
+data_set['activity'] = le.transform(data_set['activity'])
+
+data_set.reset_index(inplace=True)
+labels = data_set['activity']
+data_set.drop('activity', axis=1, inplace=True)
+data_set.drop('index', axis=1, inplace=True)
+
+sss = StratifiedShuffleSplit(labels, 10, test_size=0.3)
+
+for train_indexes, test_indexes in sss:
+    train = data_set.iloc[train_indexes]
+    test = data_set.iloc[test_indexes]
+
+    train_labels = labels.iloc[train_indexes]
+    test_labels = labels.iloc[test_indexes]
+
+    clf = tree.DecisionTreeClassifier()
+    clf.fit(train, train_labels)
+
+    results = pd.DataFrame(clf.predict(test))
+
+    test_labels = test_labels.reset_index()
+    test_labels.drop('index', axis=1, inplace=True)
+    a = pd.concat([results, test_labels], axis=1, ignore_index=True)
+    a.columns = ['predicted', 'actual']
+
+    wrong = a[a.predicted != a.actual]
+    wrong = pd.concat([wrong.predicted.astype(int), wrong.actual.astype(int)], axis=1).applymap(le.inverse_transform)
+    print(wrong)
+    fi = dict(zip(list(train.columns), list(clf.feature_importances_)))
+    print(f1_score(test_labels, results, [0, 1, 2, 3, 4]))
+    # print(fi)
