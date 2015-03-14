@@ -4,7 +4,10 @@ import os
 from sklearn.metrics.metrics import f1_score
 from sklearn import preprocessing
 from sklearn import tree
-from sklearn.cross_validation import train_test_split, StratifiedShuffleSplit
+from sklearn import dummy
+from sklearn import naive_bayes
+from sklearn import ensemble
+from sklearn.cross_validation import StratifiedShuffleSplit
 
 __author__ = 'George'
 
@@ -48,7 +51,7 @@ def extract_features(grouped):
     def corr_y_z(group):
         return pairwise_corrcoef('y', 'z', group)
 
-    features = grouped.agg([np.mean, np.std])
+    features = grouped.agg([np.mean, np.std, np.max])
     functions = [corr_x_y, corr_x_z, corr_y_z]
     for f in functions:
         series = grouped.apply(f)
@@ -66,74 +69,139 @@ def simple_plot(array1, array2, filename="Default"):
     grid(True)
     show()
 
-files = []
-data_set = None
-datasets = {}
-data_directory = "assets/data/"
-for i in os.listdir(data_directory):
-    if i.endswith(".dat"):
-        timestamp, device, user, activity = i[:-4].lower().split('-')
-        if device == 'phone':
-            datasets[(timestamp, device, user, activity)] = data_directory + i
-            print(i)
+def data_set_from_files():
+    files = []
+    data_set = None
+    datasets = {}
+    data_directory = "assets/data/"
+    for i in os.listdir(data_directory):
+        if i.endswith(".dat"):
+            timestamp, device, user, activity = i[:-4].lower().split('-')
+            if device == 'phone':
+                datasets[(timestamp, device, user, activity)] = data_directory + i
+                print(i)
 
-for k, phone_filename in datasets.items():
-    wear_filename = phone_filename.replace("phone", "wear")
+    for k, phone_filename in datasets.items():
+        wear_filename = phone_filename.replace("phone", "wear")
 
-    phone_data = pd.DataFrame(generate_additional_columns(make_array_from_file(phone_filename)))
-    wear_data = pd.DataFrame(generate_additional_columns(make_array_from_file(wear_filename)))
-    # simple_plot(phone_data, wear_data, phone_filename)
+        phone_data = pd.DataFrame(generate_additional_columns(make_array_from_file(phone_filename)))
+        wear_data = pd.DataFrame(generate_additional_columns(make_array_from_file(wear_filename)))
+        # simple_plot(phone_data, wear_data, phone_filename)
 
-    phone_data.set_index('timestamp', inplace=True)
-    wear_data.set_index('timestamp', inplace=True)
+        phone_data.set_index('timestamp', inplace=True)
+        wear_data.set_index('timestamp', inplace=True)
 
-    phone_features = extract_features(bin(phone_data))
-    wear_features = extract_features(bin(wear_data))
+        phone_features = extract_features(bin(phone_data))
+        wear_features = extract_features(bin(wear_data))
 
-    renaming_function = lambda d: lambda xy: (d, ) + (xy, )
-    phone_features.rename(columns=renaming_function('phone'), inplace=True)
-    wear_features.rename(columns=renaming_function('wear'), inplace=True)
-    combined_features = pd.concat([phone_features, wear_features], axis=1)
-    # combined_features = wear_features
-    combined_features['activity'] = k[3]
-    combined_features = combined_features[1:-1]  # drop the first and last rows to reduce the effect of fumbling
+        renaming_function = lambda d: lambda xy: (d, ) + (xy, )
+        phone_features.rename(columns=renaming_function('phone'), inplace=True)
+        wear_features.rename(columns=renaming_function('wear'), inplace=True)
+        combined_features = pd.concat([phone_features, wear_features], axis=1)
+        # combined_features = wear_features
+        # combined_features = phone_features
+        combined_features['activity'] = k[3]
+        combined_features = combined_features[1:-1]  # drop the first and last rows to reduce the effect of fumbling
 
-    if data_set is None:
-        data_set = combined_features
-    else:
-        data_set = data_set.append(combined_features)
+        if data_set is None:
+            data_set = combined_features
+        else:
+            data_set = data_set.append(combined_features)
 
-le = preprocessing.LabelEncoder()
-le.fit(data_set['activity'])
-data_set['activity'] = le.transform(data_set['activity'])
 
-data_set.reset_index(inplace=True)
-labels = data_set['activity']
-data_set.drop('activity', axis=1, inplace=True)
-data_set.drop('index', axis=1, inplace=True)
+    le = preprocessing.LabelEncoder()
+    le.fit(data_set['activity'])
+    data_set['activity'] = le.transform(data_set['activity'])
+
+    data_set.reset_index(inplace=True)
+    labels = data_set['activity']
+    data_set.drop('activity', axis=1, inplace=True)
+    data_set.drop('index', axis=1, inplace=True)
+
+    return data_set, labels, phone_features.columns, wear_features.columns, le
+
+
+data_set, labels, phone_columns, wear_columns, label_encoder = data_set_from_files()
 
 sss = StratifiedShuffleSplit(labels, 10, test_size=0.3)
 
+classifiers = [tree.DecisionTreeClassifier,
+               dummy.DummyClassifier,
+               ensemble.RandomForestClassifier,
+               naive_bayes.GaussianNB,
+               ]
+
+f1 = {}
+for c in classifiers:
+    f1[c.__name__] = {}
+
 for train_indexes, test_indexes in sss:
     train = data_set.iloc[train_indexes]
+    train_phone = train[phone_columns]
+    train_wear = train[wear_columns]
+
     test = data_set.iloc[test_indexes]
+    test_phone = test[phone_columns]
+    test_wear = test[wear_columns]
 
     train_labels = labels.iloc[train_indexes]
     test_labels = labels.iloc[test_indexes]
 
-    clf = tree.DecisionTreeClassifier()
-    clf.fit(train, train_labels)
-
-    results = pd.DataFrame(clf.predict(test))
-
     test_labels = test_labels.reset_index()
     test_labels.drop('index', axis=1, inplace=True)
-    a = pd.concat([results, test_labels], axis=1, ignore_index=True)
-    a.columns = ['predicted', 'actual']
 
-    wrong = a[a.predicted != a.actual]
-    wrong = pd.concat([wrong.predicted.astype(int), wrong.actual.astype(int)], axis=1).applymap(le.inverse_transform)
-    print(wrong)
-    fi = dict(zip(list(train.columns), list(clf.feature_importances_)))
-    print(f1_score(test_labels, results, [0, 1, 2, 3, 4]))
-    # print(fi)
+    for c in classifiers:
+        scores = f1[c.__name__]
+
+        clf = c()
+        clf.fit(train, train_labels)
+        results = pd.DataFrame(clf.predict(test))
+        if 'both' in scores:
+            scores['both'] = np.vstack((scores['both'], f1_score(test_labels, results, average=None)))
+        else:
+            scores['both'] = f1_score(test_labels, results, average=None)
+
+        clf = c()
+        clf.fit(train_phone, train_labels)
+        results = pd.DataFrame(clf.predict(test_phone))
+        if 'phone' in scores:
+            scores['phone'] = np.vstack((scores['phone'], f1_score(test_labels, results, average=None)))
+        else:
+            scores['phone'] = f1_score(test_labels, results, average=None)
+
+        clf = c()
+        clf.fit(train_wear, train_labels)
+        results = pd.DataFrame(clf.predict(test_wear))
+        if 'wear' in scores:
+            scores['wear'] = np.vstack((scores['wear'], f1_score(test_labels, results, average=None)))
+        else:
+            scores['wear'] = f1_score(test_labels, results, average=None)
+
+        # a = pd.concat([results, test_labels], axis=1, ignore_index=True)
+        # a.columns = ['predicted', 'actual']
+        # wrong = a[a.predicted != a.actual]
+        # wrong = pd.concat([wrong.predicted.astype(int), wrong.actual.astype(int)], axis=1).applymap(le.inverse_transform)
+        # print(wrong)
+
+        # fi = dict(zip(list(train.columns), list(clf.feature_importances_)))
+        # print(f1_scores[-1])
+        # print(fi)
+
+# f1_averages = pd.DataFrame(np.asarray(f1_scores).T.tolist()).apply(np.mean)
+
+
+# print("average f1 scores: ")
+# print(dict(zip(list(le.inverse_transform([0, 1, 2, 3, 4])), f1_averages)))
+print(len(test))
+
+for k, v in f1.items():
+    for k1, v1 in f1[k].items():
+        f1[k][k1] = np.mean(v1, axis=0)
+    f1[k] = pd.DataFrame.from_dict(f1[k])
+    f1[k].index = label_encoder.inverse_transform(f1[k].index)
+    print(k)
+    print(f1[k])
+
+print("Improvement of RandomForestClassifier over DummyClassifier")
+print(f1['RandomForestClassifier'] - f1['DummyClassifier'])
+# POSSIBLY IGNORE CYCLING DATA BEFORE 11/03/14 - it was collected in a rucksack.
