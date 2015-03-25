@@ -78,12 +78,17 @@ def spectral_flatness(power_spec):
 
 def simple_plot(array1, array2=None, filename="Default.pdf"):
     # plot(array['timestamp'], array['x'], 'r', array['timestamp'], array['y'], 'g', array['timestamp'], array['z'], 'b')
-    plot(array1['timestamp'], array1['magnitude'], 'r', array2['timestamp'], array2['magnitude'], 'b')
-    xlabel('time (s)')
-    ylabel('acceleration (m/s2)')
-    title(filename)
-    grid(True)
-    show()
+    if array2 is None:
+        plt.plot(array1.index, array1.magnitude)
+    else:
+        plt.plot(array1.index, array1.magnitude, 'r', array2.index, array2.magnitude, 'b')
+    plt.xlabel('time (s)')
+    plt.ylabel('acceleration (m/s2)')
+    plt.title(filename)
+    plt.grid(True)
+    plt.show()
+    # plt.savefig(filename.replace(".dat", ".pdf"))
+
 
 def data_set_from_files():
     files = []
