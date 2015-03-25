@@ -108,7 +108,6 @@ def data_set_from_files():
         else:
             data_set = data_set.append(combined_features)
 
-
     le = preprocessing.LabelEncoder()
     le.fit(data_set['activity'])
     data_set['activity'] = le.transform(data_set['activity'])
@@ -118,12 +117,74 @@ def data_set_from_files():
     data_set.drop('activity', axis=1, inplace=True)
     data_set.drop('index', axis=1, inplace=True)
 
-    return data_set, labels, phone_features.columns, wear_features.columns, le
+    lb = preprocessing.LabelBinarizer()
+    lb.fit(labels)
+
+    binary_labels = lb.transform(labels)
+
+    return data_set, labels, binary_labels, phone_features.columns, wear_features.columns, le
 
 
-data_set, labels, phone_columns, wear_columns, label_encoder = data_set_from_files()
+def generate_f1(data_set, labels, phone_columns, wear_columns, classifiers, label_encoder):
+    f1 = {}
+    sss = StratifiedShuffleSplit(labels, 10, test_size=0.3)
+    for c in classifiers:
+        f1[c.__name__] = {}
 
-sss = StratifiedShuffleSplit(labels, 10, test_size=0.3)
+    for train_indexes, test_indexes in sss:
+        train = data_set.iloc[train_indexes]
+        train_phone = train[phone_columns]
+        train_wear = train[wear_columns]
+
+        test = data_set.iloc[test_indexes]
+        test_phone = test[phone_columns]
+        test_wear = test[wear_columns]
+
+        train_labels = labels.iloc[train_indexes]
+        test_labels = labels.iloc[test_indexes]
+
+        test_labels = test_labels.reset_index()
+        test_labels.drop('index', axis=1, inplace=True)
+
+        for c in classifiers:
+            scores = f1[c.__name__]
+
+            clf = c()
+            clf.fit(train, train_labels)
+            results = pd.DataFrame(clf.predict(test))
+            if 'both' in scores:
+                scores['both'] = np.vstack((scores['both'], f1_score(test_labels, results, average=None)))
+            else:
+                scores['both'] = f1_score(test_labels, results, average=None)
+
+            clf = c()
+            clf.fit(train_phone, train_labels)
+            results = pd.DataFrame(clf.predict(test_phone))
+            if 'phone' in scores:
+                scores['phone'] = np.vstack((scores['phone'], f1_score(test_labels, results, average=None)))
+            else:
+                scores['phone'] = f1_score(test_labels, results, average=None)
+
+            clf = c()
+            clf.fit(train_wear, train_labels)
+            results = pd.DataFrame(clf.predict(test_wear))
+            if 'wear' in scores:
+                scores['wear'] = np.vstack((scores['wear'], f1_score(test_labels, results, average=None)))
+            else:
+                scores['wear'] = f1_score(test_labels, results, average=None)
+
+            # fi = dict(zip(list(train.columns), list(clf.feature_importances_)))
+
+    for k, v in f1.items():
+        for k1, v1 in f1[k].items():
+            f1[k][k1] = np.mean(v1, axis=0)
+        f1[k] = pd.DataFrame.from_dict(f1[k])
+        f1[k].index = label_encoder.inverse_transform(f1[k].index)
+    return f1
+
+plt.ioff()
+
+data_set, labels, binary_labels, phone_columns, wear_columns, label_encoder = data_set_from_files()
 
 classifiers = [tree.DecisionTreeClassifier,
                dummy.DummyClassifier,
@@ -131,76 +192,11 @@ classifiers = [tree.DecisionTreeClassifier,
                naive_bayes.GaussianNB,
                ]
 
-f1 = {}
-for c in classifiers:
-    f1[c.__name__] = {}
-
-for train_indexes, test_indexes in sss:
-    train = data_set.iloc[train_indexes]
-    train_phone = train[phone_columns]
-    train_wear = train[wear_columns]
-
-    test = data_set.iloc[test_indexes]
-    test_phone = test[phone_columns]
-    test_wear = test[wear_columns]
-
-    train_labels = labels.iloc[train_indexes]
-    test_labels = labels.iloc[test_indexes]
-
-    test_labels = test_labels.reset_index()
-    test_labels.drop('index', axis=1, inplace=True)
-
-    for c in classifiers:
-        scores = f1[c.__name__]
-
-        clf = c()
-        clf.fit(train, train_labels)
-        results = pd.DataFrame(clf.predict(test))
-        if 'both' in scores:
-            scores['both'] = np.vstack((scores['both'], f1_score(test_labels, results, average=None)))
-        else:
-            scores['both'] = f1_score(test_labels, results, average=None)
-
-        clf = c()
-        clf.fit(train_phone, train_labels)
-        results = pd.DataFrame(clf.predict(test_phone))
-        if 'phone' in scores:
-            scores['phone'] = np.vstack((scores['phone'], f1_score(test_labels, results, average=None)))
-        else:
-            scores['phone'] = f1_score(test_labels, results, average=None)
-
-        clf = c()
-        clf.fit(train_wear, train_labels)
-        results = pd.DataFrame(clf.predict(test_wear))
-        if 'wear' in scores:
-            scores['wear'] = np.vstack((scores['wear'], f1_score(test_labels, results, average=None)))
-        else:
-            scores['wear'] = f1_score(test_labels, results, average=None)
-
-        # a = pd.concat([results, test_labels], axis=1, ignore_index=True)
-        # a.columns = ['predicted', 'actual']
-        # wrong = a[a.predicted != a.actual]
-        # wrong = pd.concat([wrong.predicted.astype(int), wrong.actual.astype(int)], axis=1).applymap(le.inverse_transform)
-        # print(wrong)
-
-        # fi = dict(zip(list(train.columns), list(clf.feature_importances_)))
-        # print(f1_scores[-1])
-        # print(fi)
-
-# f1_averages = pd.DataFrame(np.asarray(f1_scores).T.tolist()).apply(np.mean)
-
-
-# print("average f1 scores: ")
-# print(dict(zip(list(le.inverse_transform([0, 1, 2, 3, 4])), f1_averages)))
-print(len(test))
+f1 = generate_f1(data_set, labels, phone_columns, wear_columns, classifiers, label_encoder)
 
 for k, v in f1.items():
-    for k1, v1 in f1[k].items():
-        f1[k][k1] = np.mean(v1, axis=0)
-    f1[k] = pd.DataFrame.from_dict(f1[k])
-    f1[k].index = label_encoder.inverse_transform(f1[k].index)
     print(k)
-    print(f1[k])
+    print(v)
 
 print("Improvement of RandomForestClassifier over DummyClassifier")
 print(f1['RandomForestClassifier'] - f1['DummyClassifier'])
