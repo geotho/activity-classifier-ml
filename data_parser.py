@@ -60,7 +60,23 @@ def extract_features(grouped):
     return features
 
 
-def simple_plot(array1, array2, filename="Default"):
+def fourier_transform(df):
+    n = len(df.index)
+    fs = (n / max(df.index))
+    dft = pd.DataFrame(np.fft.rfft(phone_data.magnitude-np.mean(phone_data.magnitude)))
+    dft.index = np.fft.rfftfreq(n, d=1/fs)
+    return dft
+
+
+def power_spectrum(dft):
+    return dft.abs().apply(lambda x: x**2)
+
+
+def spectral_flatness(power_spec):
+    return sp.stats.gmean(power_spec)/np.mean(power_spec)
+
+
+def simple_plot(array1, array2=None, filename="Default.pdf"):
     # plot(array['timestamp'], array['x'], 'r', array['timestamp'], array['y'], 'g', array['timestamp'], array['z'], 'b')
     plot(array1['timestamp'], array1['magnitude'], 'r', array2['timestamp'], array2['magnitude'], 'b')
     xlabel('time (s)')
