@@ -1,3 +1,4 @@
+from urllib.response import addinfourl
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -10,6 +11,8 @@ from sklearn import tree
 from sklearn import dummy
 from sklearn import naive_bayes
 from sklearn import ensemble
+from pandas.tools.plotting import autocorrelation_plot
+from scipy import signal
 from sklearn.cross_validation import StratifiedShuffleSplit
 
 __author__ = 'George'
@@ -33,6 +36,18 @@ def generate_additional_columns(old_array):
     return new_array
 
 
+def make_dataframes_from_filename(phone_filename):
+    wear_filename = phone_filename.replace("phone", "wear")
+
+    phone_data = pd.DataFrame(generate_additional_columns(make_array_from_file(phone_filename)))
+    wear_data = pd.DataFrame(generate_additional_columns(make_array_from_file(wear_filename)))
+
+    phone_data.set_index('timestamp', inplace=True)
+    wear_data.set_index('timestamp', inplace=True)
+
+    return phone_data, wear_data
+
+
 def bin(df):
     filtervalues = list(range(0, math.ceil(df.index.max() / 10) * 10 + 1, 10))
     bins = pd.cut(df.index, bins=filtervalues)
@@ -54,8 +69,20 @@ def extract_features(grouped):
     def corr_y_z(group):
         return pairwise_corrcoef('y', 'z', group)
 
-    features = grouped.agg([np.mean, np.std, np.max])
-    functions = [corr_x_y, corr_x_z, corr_y_z]
+    def mean_average_deviation(data):
+        return np.mean(np.abs(data - np.mean(data)))
+
+    def flatness(group):
+        return spectral_flatness(power_spectrum(fourier_transform(group['magnitude'])))[0]
+
+    def entropy(group):
+        return spectral_entropy(power_spectrum(fourier_transform(group['magnitude'])))[0]
+
+    def peak_frequency(group):
+        return power_spectrum(fourier_transform(group['magnitude'])).idxmax()[0]
+
+    features = grouped.agg([np.mean, np.std, np.max, mean_average_deviation])
+    functions = [corr_x_y, corr_x_z, corr_y_z, flatness, entropy, peak_frequency]
     for f in functions:
         series = grouped.apply(f)
         series.name = f.__name__
@@ -63,10 +90,26 @@ def extract_features(grouped):
     return features
 
 
-def fourier_transform(df):
+def sampling_frequency(df):
     n = len(df.index)
-    fs = (n / max(df.index))
-    dft = pd.DataFrame(np.fft.rfft(phone_data.magnitude-np.mean(phone_data.magnitude)))
+    return n / (df.index.max()-df.index.min())
+
+
+def low_pass_filter(df):
+    N = 4
+    fs = sampling_frequency(df)
+    cut_off = 5
+    b, a = signal.butter(N, cut_off/(fs/2.0), btype='low', analog=False, output='ba')
+    data_f = pd.DataFrame(signal.filtfilt(b, a, df, axis=0))
+    data_f.index = df.index
+    data_f.columns = df.columns
+    return data_f
+
+
+def fourier_transform(df):
+    n = len(df)
+    fs = sampling_frequency(df)
+    dft = pd.DataFrame(np.fft.rfft(df-df.mean()))
     dft.index = np.fft.rfftfreq(n, d=1/fs)
     return dft
 
@@ -77,6 +120,16 @@ def power_spectrum(dft):
 
 def spectral_flatness(power_spec):
     return sp.stats.gmean(power_spec)/np.mean(power_spec)
+
+
+def spectral_entropy(power_spec):
+    normalised_power_spec = power_spec / power_spec.sum()
+    return -(normalised_power_spec * normalised_power_spec.apply(np.log2)).sum()
+
+
+def welch(df):
+    fs = sampling_frequency(df)
+    return sp.signal.welch(df, fs, nperseg=1024)
 
 
 def simple_plot(array1, array2=None, filename="Default.pdf"):
@@ -94,26 +147,65 @@ def simple_plot(array1, array2=None, filename="Default.pdf"):
 
 
 def data_set_from_files():
-    files = []
     data_set = None
-    datasets = {}
+    filenames = {}
+
+    global data_sets
+    data_sets = {}
+
     data_directory = "assets/data/"
     for i in os.listdir(data_directory):
         if i.endswith(".dat"):
             timestamp, device, user, activity = i[:-4].lower().split('-')
             if device == 'phone':
-                datasets[(timestamp, device, user, activity)] = data_directory + i
+                filenames[(timestamp, device, user, activity)] = data_directory + i
                 print(i)
 
-    for k, phone_filename in datasets.items():
-        wear_filename = phone_filename.replace("phone", "wear")
+    for (timestamp, device, user, activity), phone_filename in filenames.items():
+        phone_data, wear_data = make_dataframes_from_filename(phone_filename)
 
-        phone_data = pd.DataFrame(generate_additional_columns(make_array_from_file(phone_filename)))
-        wear_data = pd.DataFrame(generate_additional_columns(make_array_from_file(wear_filename)))
+        data_sets[(timestamp, 'phone', user, activity)] = phone_data
+        data_sets[(timestamp, 'wear', user, activity)] = wear_data
+
+        phone_data = low_pass_filter(phone_data)
+        wear_data = low_pass_filter(wear_data)
+
+        # plt.plot(phone_data.magnitude)
+        # plt.title(phone_filename)
+        # plt.show()
+        #
+        # plt.plot(low_pass_filter(phone_data.magnitude))
+        # plt.title(phone_filename)
+        # plt.show()
+
+        # print(phone_filename)
+        # autocorrelation_plot(phone_data.magnitude-np.mean(phone_data.magnitude))
+        # plt.show()
+        # if len(phone_data) < len(wear_data):
+        #     plt.xcorr(np.pad(phone_data.magnitude-np.mean(phone_data.magnitude), (0, len(wear_data) - len(phone_data)), mode='constant', constant_values=(9.81, 9.81)), wear_data.magnitude-np.mean(wear_data.magnitude), maxlags=30)
+        # else:
+        #     plt.xcorr(np.pad(wear_data.magnitude-np.mean(wear_data.magnitude), (0, len(phone_data) - len(wear_data)), mode='constant', constant_values=(9.81, 9.81)), phone_data.magnitude-np.mean(phone_data.magnitude), maxlags=30)
+
+
+        # plt.xcorr()
+        # plt.acorr(wear_data.magnitude-np.mean(wear_data.magnitude), maxlags=None)
+        # plt.title(wear_filename)
+        # plt.show()
+        # b = plt.acorr(wear_data.magnitude)
+        # fs = len(phone_data.index) / max(phone_data.index)
+        # plt.plot(phone_data.index * fs / len(phone_data.index), np.abs(np.fft.fft(phone_data.magnitude-np.mean(phone_data.magnitude))))
         # simple_plot(phone_data, wear_data, phone_filename)
 
-        phone_data.set_index('timestamp', inplace=True)
-        wear_data.set_index('timestamp', inplace=True)
+        # fourier_transform(phone_data.magnitude).abs().plot()
+        # plt.title(phone_filename)
+        # plt.show()
+        #
+        # fourier_transform((phone_data.magnitude)).abs().plot()
+        # plt.title(phone_filename + "low pass filtered")
+        # plt.show()
+
+        # print(phone_filename)
+        # print(spectral_entropy(power_spectrum(fourier_transform(phone_data))))
 
         phone_features = extract_features(bin(phone_data))
         wear_features = extract_features(bin(wear_data))
@@ -122,9 +214,7 @@ def data_set_from_files():
         phone_features.rename(columns=renaming_function('phone'), inplace=True)
         wear_features.rename(columns=renaming_function('wear'), inplace=True)
         combined_features = pd.concat([phone_features, wear_features], axis=1)
-        # combined_features = wear_features
-        # combined_features = phone_features
-        combined_features['activity'] = k[3]
+        combined_features['activity'] = activity
         combined_features = combined_features[1:-1]  # drop the first and last rows to reduce the effect of fumbling
 
         if data_set is None:
@@ -181,6 +271,8 @@ def generate_f1(data_set, labels, phone_columns, wear_columns, classifiers, labe
             else:
                 scores['both'] = f1_score(test_labels, results, average=None)
 
+            # print(dict(zip(list(train.columns), list(clf.feature_importances_))))
+
             clf = c()
             clf.fit(train_phone, train_labels)
             results = pd.DataFrame(clf.predict(test_phone))
@@ -197,7 +289,6 @@ def generate_f1(data_set, labels, phone_columns, wear_columns, classifiers, labe
             else:
                 scores['wear'] = f1_score(test_labels, results, average=None)
 
-            # fi = dict(zip(list(train.columns), list(clf.feature_importances_)))
 
     for k, v in f1.items():
         for k1, v1 in f1[k].items():
@@ -206,22 +297,27 @@ def generate_f1(data_set, labels, phone_columns, wear_columns, classifiers, labe
         f1[k].index = label_encoder.inverse_transform(f1[k].index)
     return f1
 
-plt.ioff()
 
-data_set, labels, binary_labels, phone_columns, wear_columns, label_encoder = data_set_from_files()
+def main():
+    plt.ioff()
 
-classifiers = [tree.DecisionTreeClassifier,
-               dummy.DummyClassifier,
-               ensemble.RandomForestClassifier,
-               naive_bayes.GaussianNB,
-               ]
+    data_set, labels, binary_labels, phone_columns, wear_columns, label_encoder = data_set_from_files()
 
-f1 = generate_f1(data_set, labels, phone_columns, wear_columns, classifiers, label_encoder)
+    classifiers = [tree.DecisionTreeClassifier,
+                   dummy.DummyClassifier,
+                   ensemble.RandomForestClassifier,
+                   naive_bayes.GaussianNB,
+                   ]
 
-for k, v in f1.items():
-    print(k)
-    print(v)
+    f1 = generate_f1(data_set, labels, phone_columns, wear_columns, classifiers, label_encoder)
 
-print("Improvement of RandomForestClassifier over DummyClassifier")
-print(f1['RandomForestClassifier'] - f1['DummyClassifier'])
-# POSSIBLY IGNORE CYCLING DATA BEFORE 11/03/14 - it was collected in a rucksack.
+    for k, v in f1.items():
+        print(k)
+        print(v)
+
+    print("Improvement of RandomForestClassifier over DummyClassifier")
+    print(f1['RandomForestClassifier'] - f1['DummyClassifier'])
+    # POSSIBLY IGNORE CYCLING DATA BEFORE 11/03/14 - it was collected in a rucksack.
+
+if __name__ == "__main__":
+    main()
